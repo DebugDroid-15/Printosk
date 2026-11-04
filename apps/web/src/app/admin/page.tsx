@@ -201,7 +201,7 @@ export default function AdminDashboard() {
           </form>
 
           <p className="text-[11px] font-bold text-slate-400">
-            Authorized operator? Default passcode is <span className="font-mono text-slate-700 font-black">admin123</span>
+            Authorized operator personnel only.
           </p>
         </div>
       </div>
