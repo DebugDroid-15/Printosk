@@ -145,9 +145,9 @@ export interface PrintLog {
 
 // Pricing rules (in Paise, where 100 Paise = 1 INR)
 export interface PricingConfig {
-  bwPricePerPagePaise: number;     // e.g. 200 (₹2.00)
-  colourPricePerPagePaise: number; // e.g. 1000 (₹10.00)
-  duplexDiscountPaise: number;     // e.g. 50 (₹0.50 discount on second side)
+  bwPricePerPagePaise: number;     // 150 (₹1.50)
+  colourPricePerPagePaise: number; // 500 (₹5.00)
+  duplexDiscountPaise: number;     // 25 (₹0.25)
 }
 
 // Kiosk Job Authorization RPC request/response

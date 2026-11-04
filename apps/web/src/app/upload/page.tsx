@@ -22,9 +22,9 @@ export default function UploadPage() {
   const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Pricing constants (in ₹)
-  const BW_RATE = 2.0; // ₹2.00 per page
-  const COLOUR_RATE = 10.0; // ₹10.00 per page
+  // Updated student pricing: B&W = ₹1.50, Colour = ₹5.00
+  const BW_RATE = 1.5; // ₹1.50 per page
+  const COLOUR_RATE = 5.0; // ₹5.00 per page
 
   const ratePerPage = colourMode === 'BW' ? BW_RATE : COLOUR_RATE;
   const totalAmount = (totalPages * copies * ratePerPage).toFixed(2);

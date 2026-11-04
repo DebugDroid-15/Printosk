@@ -1,15 +1,22 @@
 import Link from 'next/link';
-import { Sparkles, Heart, Printer, QrCode, ArrowRight, Star, FileText, CheckCircle2 } from 'lucide-react';
+import Image from 'next/image';
+import { Sparkles, Heart, QrCode, ArrowRight, Star, FileText, CheckCircle2 } from 'lucide-react';
 
 export default function HomePage() {
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Kawaii Cute Header */}
-      <header className="border-b-4 border-kawaii-pink-light bg-white/90 backdrop-blur-md sticky top-0 z-50">
+      {/* Kawaii Cute Header with Official Mascot Logo */}
+      <header className="border-b-4 border-kawaii-pink-light bg-white/95 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 h-20 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-gradient-to-tr from-kawaii-pink to-kawaii-pink-dark text-white p-3 rounded-3xl shadow-kawaii animate-bounce-cute">
-              <Printer className="w-7 h-7" />
+          <Link href="/" className="flex items-center space-x-3 group">
+            <div className="relative w-14 h-14 transition-transform group-hover:scale-105">
+              <Image
+                src="/brand/logo.png"
+                alt="Printosk 2.0 Mascot"
+                fill
+                priority
+                className="object-contain"
+              />
             </div>
             <div>
               <div className="flex items-center space-x-1.5">
@@ -24,7 +31,7 @@ export default function HomePage() {
                 Campus Self-Printing Bestie! 💕
               </p>
             </div>
-          </div>
+          </Link>
 
           <div className="flex items-center space-x-3">
             <Link
@@ -40,13 +47,24 @@ export default function HomePage() {
 
       {/* Hero Section */}
       <main className="flex-1">
-        <section className="py-16 px-4 text-center max-w-4xl mx-auto relative">
+        <section className="py-12 sm:py-16 px-4 text-center max-w-4xl mx-auto relative">
+          {/* Central Mascot Badge */}
+          <div className="relative w-44 h-44 sm:w-56 sm:h-56 mx-auto mb-6 drop-shadow-[0_12px_20px_rgba(251,111,146,0.35)] animate-bounce-cute">
+            <Image
+              src="/brand/logo.png"
+              alt="Printosk 2.0 Cute Mascot"
+              fill
+              priority
+              className="object-contain"
+            />
+          </div>
+
           {/* Floating cute decorative stickers */}
-          <div className="hidden sm:block absolute top-10 left-4 bg-kawaii-yellow-light border-2 border-slate-800 rounded-3xl p-3 shadow-[4px_4px_0px_0px_#1E293B] animate-float-cute rotate-[-6deg]">
+          <div className="hidden sm:block absolute top-16 left-4 bg-kawaii-yellow-light border-2 border-slate-800 rounded-3xl p-3 shadow-[4px_4px_0px_0px_#1E293B] animate-float-cute rotate-[-6deg]">
             <span className="text-xl">🐱</span>
             <span className="text-xs font-black text-slate-800 ml-1.5">No Lines!</span>
           </div>
-          <div className="hidden sm:block absolute top-14 right-4 bg-kawaii-mint-light border-2 border-slate-800 rounded-3xl p-3 shadow-[4px_4px_0px_0px_#1E293B] animate-float-cute rotate-[8deg]">
+          <div className="hidden sm:block absolute top-20 right-4 bg-kawaii-mint-light border-2 border-slate-800 rounded-3xl p-3 shadow-[4px_4px_0px_0px_#1E293B] animate-float-cute rotate-[8deg]">
             <span className="text-xl">⚡</span>
             <span className="text-xs font-black text-slate-800 ml-1.5">Scan & Go!</span>
           </div>
@@ -68,7 +86,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-base sm:text-lg font-bold text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Forget slow cyber cafes and broken printers! Upload your PDF from your phone in class, pay pocket money rates with UPI, and grab your papers at the kiosk in seconds! 🎉
+            Forget slow cyber cafes and broken printers! Upload your PDF from your phone in class, pay pocket money rates with UPI (<span className="text-slate-900 font-black">₹1.50 B&W / ₹5 Colour</span>), and grab your papers at the kiosk in seconds! 🎉
           </p>
 
           {/* Action Buttons */}
@@ -109,7 +127,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="font-black text-xl text-slate-900 mb-2">Upload & Customize</h3>
                 <p className="font-semibold text-slate-600 text-sm leading-relaxed">
-                  Drop your notes or assignment PDF. Pick Black & White (₹2) or vibrant Colour (₹10).
+                  Drop your notes or assignment PDF. Pick Black & White (<span className="text-slate-900 font-bold">₹1.50</span>) or vibrant Colour (<span className="text-slate-900 font-bold">₹5.00</span>).
                 </p>
                 <div className="mt-4 inline-block bg-kawaii-pink-light text-kawaii-pink-dark text-xs font-black px-3 py-1 rounded-full border border-kawaii-pink">
                   Pocket Friendly 💖
