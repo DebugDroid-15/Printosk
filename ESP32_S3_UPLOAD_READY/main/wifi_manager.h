@@ -4,8 +4,8 @@
 #include <stdbool.h>
 #include "esp_err.h"
 
-#define DEFAULT_WIFI_SSID "Printosk_Campus_Kiosk"
-#define DEFAULT_WIFI_PASS "printosk2026"
+#define DEFAULT_WIFI_SSID "Manakusaku"
+#define DEFAULT_WIFI_PASS "123456789"
 
 esp_err_t wifi_manager_init(void);
 bool wifi_manager_is_connected(void);

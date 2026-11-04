@@ -31,3 +31,4 @@ ESP32_S3_UPLOAD_READY/sdkconfig
 # System files
 .DS_Store
 Thumbs.db
+
