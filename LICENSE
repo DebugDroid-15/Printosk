@@ -1,0 +1,65 @@
+PROPRIETARY AND CONFIDENTIAL COMMERCIAL LICENSE
+==============================================================================
+PRINTOSK 2.0 — CLOUD-CONNECTED AUTOMATED SELF-SERVICE PRINTING KIOSK
+Copyright (c) 2026 Protocol Industry. All Rights Reserved.
+Odisha, India.
+==============================================================================
+
+1. OWNERSHIP AND PROPRIETARY NOTICE
+------------------------------------------------------------------------------
+This software ecosystem, firmware codebase, embedded hardware architectures, 
+USB host communication routines, cloud backend integrations, user interface 
+designs, and related documentation (collectively referred to as "the Software 
+and Design") are the exclusive proprietary property of PROTOCOL INDUSTRY, 
+having its principal operations in Odisha, India.
+
+Trademark Notice:
+"Printosk", "Printosk 2.0", and the associated mascot logos and insignia are 
+registered trademarks and trade dress of Protocol Industry (Trademark 2026).
+
+2. DEVELOPMENT AND AUTHORSHIP CREDITS
+------------------------------------------------------------------------------
+Development Period: November 2026
+Engineering & Development Team:
+  - Amar Khera
+  - Ananya Rout
+  - Lucky Kumar
+  - Omm Prakash Sahoo
+
+Designed, engineered, and packaged for commercial kiosk deployment by 
+Protocol Industry.
+
+3. STRICT PROHIBITION ON COPYING, REPRODUCTION, AND REVERSE ENGINEERING
+------------------------------------------------------------------------------
+NO PART of this software, embedded firmware, PCB schematics, hardware wiring 
+blueprints, or visual user experience may be copied, reproduced, distributed, 
+modified, reverse-engineered, decompiled, disassembled, mirrored, or translated 
+into any language or computer code, in any form or by any means, electronic, 
+mechanical, or otherwise, without the prior express written consent of 
+Protocol Industry.
+
+No reproduction or imitation of this physical or digital kiosk setup, including 
+the single-microcontroller USB Host architecture, QR-authorized release flow, 
+or raster document translation engine, is permitted.
+
+4. LEGAL ENFORCEMENT AND JURISDICTION
+------------------------------------------------------------------------------
+ANY UNAUTHORIZED USE, DUPLICATION, SALE, SUB-LICENSING, OR COMMERCIAL CLONING 
+OF THIS SYSTEM IS A DIRECT VIOLATION OF INDIAN INTELLECTUAL PROPERTY LAWS, 
+THE COPYRIGHT ACT, 1957, AND APPLICABLE INTERNATIONAL COPYRIGHT TREATIES.
+
+If any party is found copying, deploying, or utilizing this proprietary design 
+or codebase without written authorization, it will be treated as an act of 
+willful infringement and a matter of immediate legal prosecution.
+
+Jurisdiction:
+All legal proceedings, disputes, and claims arising out of or in connection 
+with the breach of this proprietary license, copyright, or trademark shall 
+be subject to the exclusive jurisdiction of the competent courts in Odisha, 
+culminating in the High Court of Judicature of Odisha (Odisha High Court), 
+Cuttack, Odisha, India.
+
+==============================================================================
+For commercial inquiries, licensing, and kiosk fleet procurement:
+PROTOCOL INDUSTRY — ODISHA, INDIA (2026)
+==============================================================================

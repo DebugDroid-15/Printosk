@@ -172,5 +172,13 @@ Printosk/
 
 ---
 
-## 📄 License
-This project is proprietary and open for authorized educational, campus, and commercial kiosk deployment under the **MIT License**.
+## 📄 License & Proprietary Rights
+
+**Copyright © November 2026 Protocol Industry. All Rights Reserved. Odisha, India.**
+
+**Development Team**: Amar Khera, Ananya Rout, Lucky Kumar, Omm Prakash Sahoo  
+**Trademark**: Protocol Industry (2026)
+
+This software, embedded firmware, hardware schematic, and physical kiosk setup are the exclusive proprietary property of **Protocol Industry**. No copying, reproduction, cloning, or distribution of this design is allowed. Any unauthorized infringement or duplication is strictly prohibited and subject to immediate legal prosecution under the exclusive jurisdiction of the **Odisha High Court**, Cuttack, Odisha, India.
+
+For full legal terms, see the [LICENSE](LICENSE) file.
