@@ -28,3 +28,4 @@ This standalone firmware tests your physical **ESP32-S3 N16R8** board with:
    .\flash_test.bat COM5
    ```
    *(Replace `COM5` with your actual serial port number).*
+

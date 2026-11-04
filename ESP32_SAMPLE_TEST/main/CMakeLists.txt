@@ -3,3 +3,4 @@ idf_component_register(
     INCLUDE_DIRS "."
     REQUIRES esp_wifi esp_event nvs_flash esp_http_client led_strip esp_netif
 )
+

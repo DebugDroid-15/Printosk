@@ -52,3 +52,4 @@ echo ========================================================
 echo.
 echo Starting Serial Monitor (Press Ctrl+] to exit)...
 call idf.py -p %PORT% monitor
+
