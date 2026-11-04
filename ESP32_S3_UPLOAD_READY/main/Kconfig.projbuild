@@ -1,0 +1,40 @@
+menu "Printosk Kiosk Configuration"
+
+    config KIOSK_CODE
+        string "Kiosk Device Code"
+        default "BBSR001"
+        help
+            Unique identification code for this physical kiosk (e.g. BBSR001, BBSR002).
+
+    config KIOSK_WIFI_SSID
+        string "Campus Wi-Fi SSID"
+        default "Printosk_Campus_Kiosk"
+        help
+            SSID of the Wi-Fi network at the kiosk installation location.
+
+    config KIOSK_WIFI_PASSWORD
+        string "Campus Wi-Fi Password"
+        default "printosk2026"
+        help
+            WPA2 Pre-shared key for the Wi-Fi network.
+
+    config KIOSK_BACKEND_URL
+        string "Cloud Backend Endpoint"
+        default "https://printosk.vercel.app"
+        help
+            Base HTTPS URL of the Printosk 2.0 cloud deployment.
+
+    config RGB_LED_GPIO
+        int "WS2812 Onboard RGB LED Pin"
+        default 48
+        help
+            GPIO pin connected to the onboard WS2812 RGB LED (48 for DevKitC-1, 38 for Waveshare).
+
+    config BUZZER_GPIO
+        int "Buzzer Alert Output Pin"
+        default 4
+        help
+            GPIO connected to the buzzer transistor driver.
+
+endmenu
+

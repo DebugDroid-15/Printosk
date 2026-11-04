@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap');
+
+:root {
+  --font-fredoka: 'Fredoka', 'Nunito', -apple-system, sans-serif;
+}
+
+body {
+  font-family: var(--font-fredoka);
+  background-color: #FFF9FB;
+  background-image: radial-gradient(#FFE5EC 1.5px, transparent 1.5px), radial-gradient(#E8E5FF 1.5px, #FFF9FB 1.5px);
+  background-size: 30px 30px;
+  background-position: 0 0, 15px 15px;
+  color: #3D3447;
+}
+
+/* Cute button active states */
+button:active {
+  transform: translateY(2px);
+}
