@@ -40,49 +40,34 @@ interface PrintJobRow {
   created_at: string;
 }
 
+// Timeout threshold in seconds (if no heartbeat for 30s -> mark as OFFLINE)
+const HEARTBEAT_TIMEOUT_SECONDS = 30;
+
 export default function AdminDashboard() {
   const [selectedTab, setSelectedTab] = useState<'OVERVIEW' | 'KIOSKS' | 'JOBS' | 'LOGS'>('OVERVIEW');
   const [kiosks, setKiosks] = useState<KioskRow[]>([]);
   const [jobs, setJobs] = useState<PrintJobRow[]>([]);
   const [isLiveConnected, setIsLiveConnected] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
-  // Fetch initial live data from Supabase
+  // Update current time every 2 seconds to accurately calculate live offline status
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 2000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Fetch live kiosks & jobs from Supabase
   const fetchDashboardData = async () => {
     try {
       if (!isSupabaseConfigured) {
-        // Fallback to sample data when offline or keys not configured
-        setKiosks([
-          {
-            id: '1',
-            kiosk_code: 'BBSR001',
-            kiosk_name: 'Central Library Kiosk',
-            location: 'Ground Floor, Central Library',
-            device_status: 'ONLINE',
-            printer_status: 'READY',
-            printer_model: 'Epson EcoTank L3115',
-            last_heartbeat: new Date().toISOString(),
-          },
-          {
-            id: '2',
-            kiosk_code: 'BBSR002',
-            kiosk_name: 'Student Activity Center',
-            location: '1st Floor, SAC Building',
-            device_status: 'ONLINE',
-            printer_status: 'READY',
-            printer_model: 'Epson EcoTank L3115',
-            last_heartbeat: new Date().toISOString(),
-          },
-        ]);
-        setJobs([
-          { id: '1', job_id: 'PSK-982014', total_pages: 2, copies: 1, amount_paise: 400, status: 'CLAIMED', kiosk_id: 'BBSR001', created_at: new Date().toISOString() },
-          { id: '2', job_id: 'PSK-824691', total_pages: 5, copies: 1, amount_paise: 1000, status: 'COMPLETED', kiosk_id: 'BBSR001', created_at: new Date(Date.now() - 12 * 60000).toISOString() },
-        ]);
+        setKiosks([]);
+        setJobs([]);
         setLoading(false);
         return;
       }
 
-      const { data: kiosksData } = await supabase.from('kiosks').select('*');
+      const { data: kiosksData } = await supabase.from('kiosks').select('*').order('created_at', { ascending: true });
       if (kiosksData) setKiosks(kiosksData);
 
       const { data: jobsData } = await supabase.from('print_jobs').select('*').order('created_at', { ascending: false }).limit(20);
@@ -99,8 +84,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchDashboardData();
 
-    // 🔴 SUPABASE REALTIME SUBSCRIPTION
-    // Automatically listens for hardware heartbeats, printer errors, and new paid jobs!
+    // 🔴 SUPABASE REALTIME WEBSOCKET SUBSCRIPTION
     if (isSupabaseConfigured) {
       const channel = supabase
         .channel('admin-realtime')
@@ -108,7 +92,6 @@ export default function AdminDashboard() {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'kiosks' },
           (payload) => {
-            console.log('Realtime Kiosk Update received:', payload);
             fetchDashboardData();
           }
         )
@@ -116,7 +99,6 @@ export default function AdminDashboard() {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'print_jobs' },
           (payload) => {
-            console.log('Realtime Job Update received:', payload);
             fetchDashboardData();
           }
         )
@@ -132,10 +114,25 @@ export default function AdminDashboard() {
     }
   }, []);
 
-  // Calculate live dynamic metrics from state
+  // Dynamically calculate whether each kiosk is ONLINE or OFFLINE based on last_heartbeat
+  const evaluatedKiosks = kiosks.map((k) => {
+    if (!k.last_heartbeat) {
+      return { ...k, isLiveOnline: false, secondsAgo: 999 };
+    }
+    const lastSeenMs = new Date(k.last_heartbeat).getTime();
+    const diffSeconds = Math.max(0, Math.floor((currentTime - lastSeenMs) / 1000));
+    const isOnline = diffSeconds <= HEARTBEAT_TIMEOUT_SECONDS && k.device_status === 'ONLINE';
+
+    return {
+      ...k,
+      isLiveOnline: isOnline,
+      secondsAgo: diffSeconds,
+    };
+  });
+
+  const onlineKiosksCount = evaluatedKiosks.filter((k) => k.isLiveOnline).length;
   const totalJobsCount = jobs.length;
   const completedJobsCount = jobs.filter((j) => j.status === 'COMPLETED').length;
-  const activeKiosksCount = kiosks.filter((k) => k.device_status === 'ONLINE').length;
   const totalRevenuePaise = jobs
     .filter((j) => j.status === 'COMPLETED' || j.status === 'CLAIMED' || j.status === 'PRINTING')
     .reduce((sum, j) => sum + (j.amount_paise || 0), 0);
@@ -152,7 +149,7 @@ export default function AdminDashboard() {
             </div>
             <div>
               <h1 className="text-base font-black text-slate-900 leading-none">Printosk Command Center</h1>
-              <p className="text-[11px] font-bold text-slate-500 mt-0.5">Admin & Fleet Operations</p>
+              <p className="text-[11px] font-bold text-slate-500 mt-0.5">Live Kiosk Fleet Operations</p>
             </div>
           </div>
 
@@ -175,7 +172,7 @@ export default function AdminDashboard() {
                   isLiveConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
                 }`}
               ></span>
-              <span>{isLiveConnected ? 'Realtime WebSocket Active 🟢' : 'Standalone Mode 🟡'}</span>
+              <span>{isLiveConnected ? 'Realtime WebSocket Active 🟢' : 'Connecting... 🟡'}</span>
             </span>
           </div>
         </div>
@@ -183,7 +180,7 @@ export default function AdminDashboard() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 space-y-8">
-        {/* Metric Cards Grid - LIVE DYNAMIC VALUES */}
+        {/* Metric Cards Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between text-slate-500 mb-2">
@@ -211,10 +208,10 @@ export default function AdminDashboard() {
 
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between text-slate-500 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Online Kiosks</span>
+              <span className="text-xs font-bold uppercase tracking-wider">Active Kiosks</span>
               <Printer className="w-4 h-4 text-indigo-600" />
             </div>
-            <p className="text-2xl font-black text-slate-900">{activeKiosksCount}</p>
+            <p className="text-2xl font-black text-slate-900">{onlineKiosksCount} / {evaluatedKiosks.length}</p>
           </div>
 
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
@@ -234,10 +231,13 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Kiosk Fleet Section */}
+        {/* Physical Kiosks Section */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-black text-slate-900">Physical Kiosks & Hardware Status</h2>
+            <div>
+              <h2 className="text-lg font-black text-slate-900">Physical Kiosks & Hardware Telemetry</h2>
+              <p className="text-xs text-slate-500 font-medium">Auto-registers new devices on boot & flags disconnected kiosks after 30s</p>
+            </div>
             <button
               onClick={fetchDashboardData}
               className="text-xs font-bold bg-slate-900 text-white px-3.5 py-2 rounded-xl shadow-sm hover:bg-slate-800 transition-all flex items-center space-x-1.5"
@@ -247,70 +247,84 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {kiosks.map((kiosk) => (
-              <div
-                key={kiosk.id}
-                className={`bg-white border rounded-2xl p-6 shadow-sm space-y-4 ${
-                  kiosk.device_status === 'ONLINE' ? 'border-slate-200' : 'border-rose-200 bg-rose-50/20'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-black text-slate-900 text-lg">{kiosk.kiosk_code}</span>
+          {evaluatedKiosks.length === 0 ? (
+            <div className="bg-white border border-dashed border-slate-300 rounded-3xl p-12 text-center space-y-3">
+              <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-400">
+                <Printer className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-slate-800 text-base">No Kiosks Registered Yet</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Power on your ESP32-S3! It will automatically register itself in Supabase and appear here in real time.
+              </p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-6">
+              {evaluatedKiosks.map((kiosk) => (
+                <div
+                  key={kiosk.id}
+                  className={`bg-white border rounded-3xl p-6 shadow-sm space-y-4 transition-all ${
+                    kiosk.isLiveOnline ? 'border-emerald-300 shadow-emerald-50' : 'border-rose-300 bg-rose-50/20'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-black text-slate-900 text-lg">{kiosk.kiosk_code}</span>
+                        <span
+                          className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${
+                            kiosk.isLiveOnline
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : 'bg-rose-100 text-rose-800 border border-rose-300'
+                          }`}
+                        >
+                          {kiosk.isLiveOnline ? 'ONLINE 🟢' : 'DISCONNECTED 🔴'}
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-slate-600 mt-1">{kiosk.kiosk_name}</p>
+                      <p className="text-[11px] text-slate-400">{kiosk.location}</p>
+                    </div>
+                    <Link
+                      href={`/kiosk/${kiosk.kiosk_code}`}
+                      target="_blank"
+                      className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-700 transition-colors"
+                      title="Open Kiosk Web Interface"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </Link>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-3 space-y-2 text-xs font-medium text-slate-600">
+                    <div className="flex justify-between">
+                      <span>Printer Model:</span>
+                      <span className="font-bold text-slate-900">{kiosk.printer_model}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Printer State:</span>
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          kiosk.device_status === 'ONLINE'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-rose-100 text-rose-800'
+                        className={`font-bold ${
+                          kiosk.printer_status === 'READY'
+                            ? 'text-emerald-600'
+                            : kiosk.printer_status === 'PRINTING'
+                            ? 'text-purple-600'
+                            : 'text-rose-600'
                         }`}
                       >
-                        {kiosk.device_status}
+                        {kiosk.printer_status}
                       </span>
                     </div>
-                    <p className="text-xs font-semibold text-slate-600 mt-1">{kiosk.kiosk_name}</p>
-                    <p className="text-[11px] text-slate-400">{kiosk.location}</p>
-                  </div>
-                  <Link
-                    href={`/kiosk/${kiosk.kiosk_code}`}
-                    target="_blank"
-                    className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors"
-                    title="Open Kiosk Interface"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </Link>
-                </div>
-
-                <div className="border-t border-slate-100 pt-3 space-y-2 text-xs font-medium text-slate-600">
-                  <div className="flex justify-between">
-                    <span>Printer Hardware:</span>
-                    <span className="font-bold text-slate-900">{kiosk.printer_model}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Printer State:</span>
-                    <span
-                      className={`font-bold ${
-                        kiosk.printer_status === 'READY'
-                          ? 'text-emerald-600'
-                          : kiosk.printer_status === 'PAPER_EMPTY'
-                          ? 'text-amber-600'
-                          : 'text-rose-600'
-                      }`}
-                    >
-                      {kiosk.printer_status}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Last Heartbeat:</span>
-                    <span className="text-slate-400">
-                      {kiosk.last_heartbeat ? new Date(kiosk.last_heartbeat).toLocaleTimeString() : 'Never'}
-                    </span>
+                    <div className="flex justify-between">
+                      <span>Heartbeat Status:</span>
+                      <span className={kiosk.isLiveOnline ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
+                        {kiosk.secondsAgo <= 5
+                          ? 'Just now (Active)'
+                          : `${kiosk.secondsAgo}s ago`}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Live Print Jobs Table */}
@@ -332,31 +346,39 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {jobs.map((job) => (
-                  <tr key={job.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">{job.job_id}</td>
-                    <td className="py-3 px-4">{job.total_pages} pages × {job.copies}</td>
-                    <td className="py-3 px-4 font-bold text-slate-900">₹{((job.amount_paise || 0) / 100).toFixed(2)}</td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                          job.status === 'COMPLETED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : job.status === 'CLAIMED'
-                            ? 'bg-sky-100 text-sky-800'
-                            : job.status === 'PRINTING'
-                            ? 'bg-purple-100 text-purple-800 animate-pulse'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {job.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-400">
-                      {new Date(job.created_at).toLocaleTimeString()}
+                {jobs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-400 font-medium">
+                      No print jobs yet. Upload a document from the customer site to test!
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  jobs.map((job) => (
+                    <tr key={job.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900">{job.job_id}</td>
+                      <td className="py-3 px-4">{job.total_pages} pages × {job.copies}</td>
+                      <td className="py-3 px-4 font-bold text-slate-900">₹{((job.amount_paise || 0) / 100).toFixed(2)}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                            job.status === 'COMPLETED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : job.status === 'CLAIMED'
+                              ? 'bg-sky-100 text-sky-800'
+                              : job.status === 'PRINTING'
+                              ? 'bg-purple-100 text-purple-800 animate-pulse'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {job.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-400">
+                        {new Date(job.created_at).toLocaleTimeString()}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
