@@ -67,8 +67,8 @@ export default function UploadPage() {
     setError(null);
 
     try {
-      // Direct instant generation for testing mode (bypassing Razorpay popup)
-      const res = await fetch('/api/payments/verify', {
+      // 1. Generate active Job ID
+      const verifyRes = await fetch('/api/payments/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -78,13 +78,30 @@ export default function UploadPage() {
         }),
       });
 
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to generate kiosk code');
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success) {
+        throw new Error(verifyData.error || 'Failed to initialize job');
+      }
+
+      const generatedJobId = verifyData.jobId;
+
+      // 2. Upload the actual PDF to Supabase Storage Bucket ('documents')
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('jobId', generatedJobId);
+
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const uploadData = await uploadRes.json();
+      if (!uploadData.success) {
+        console.warn('Storage upload warning:', uploadData.error);
       }
 
       router.push(
-        `/payment-success?jobId=${data.jobId}&pages=${totalPages}&copies=${copies}&amount=${totalAmount}`
+        `/payment-success?jobId=${generatedJobId}&pages=${totalPages}&copies=${copies}&amount=${totalAmount}`
       );
     } catch (err: any) {
       setError(err.message || 'Failed to generate code. Please try again.');
