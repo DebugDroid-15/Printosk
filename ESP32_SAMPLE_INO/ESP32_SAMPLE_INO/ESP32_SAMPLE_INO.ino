@@ -1,11 +1,17 @@
 /*
+ * =========================================================================================
  * PRINTOSK 2.0 - UNIVERSAL ESP32-S3 PRINTER CONTROLLER & AUTO TEST-PRINT
- *
- * Universal Features:
- * 1. Automatic USB Device Enumeration (Epson VID 0x04B8, HP VID 0x03F0, Canon/Brother)
- * 2. On First Power-on / Printer Connect: Sends automatic diagnostic test print to the printer!
- * 3. Bidirectional USB Status checks (detects Paper Empty, Paper Jam, Ready)
- * 4. Automatic Cloud registration & heartbeat in Supabase
+ * Proprietary Software & Design by Protocol Industry © 2026, Odisha, India
+ * Team: Amar Khera, Ananya Rout, Lucky Kumar, Omm Prakash Sahoo
+ * =========================================================================================
+ * 
+ * Hardware Connections:
+ * - Built-in RGB LED: GPIO 48
+ * - Active / Passive Buzzer: GPIO 4 (+ buzzer to GPIO 4, - buzzer to GND)
+ * - USB Host D-: GPIO 19
+ * - USB Host D+: GPIO 20
+ * - USB VBUS: 5V pin (ESP32) -> VBUS on USB Type-A Female
+ * - USB GND: GND (ESP32) -> GND on USB Type-A Female
  */
 
 #include <WiFi.h>
@@ -28,6 +34,9 @@ const char* SUPABASE_KEY      = "sb_publishable_GQE-LDAIFhkc9FOtkG3aOA_huqXPHUJ"
 // Built-in RGB LED Pin (GPIO 48)
 #define RGB_BUILTIN_PIN 48
 
+// Buzzer Pin (GPIO 4)
+#define BUZZER_PIN 4
+
 // Known Printer Vendor IDs
 #define USB_VID_EPSON 0x04B8
 #define USB_VID_HP    0x03F0
@@ -42,31 +51,80 @@ enum DetectedBrand {
 static DetectedBrand s_currentBrand = BRAND_EPSON;
 static bool s_hasExecutedSelfTest = false;
 
+// ==========================================
+// 2. AUDIO & VISUAL FEEDBACK
+// ==========================================
 void setRgbColor(uint8_t r, uint8_t g, uint8_t b) {
   neopixelWrite(RGB_BUILTIN_PIN, (r * 76) / 255, (g * 76) / 255, (b * 76) / 255);
 }
 
+// Universal beep function (supports active buzzers & passive buzzers with tone)
+void beep(uint16_t freqHz, uint16_t durationMs) {
+  tone(BUZZER_PIN, freqHz, durationMs);
+  delay(durationMs);
+  noTone(BUZZER_PIN);
+}
+
+// Sound Profiles
+void soundBootUp() {
+  // Pleasant 2-tone chime on boot
+  beep(1200, 80);
+  delay(40);
+  beep(1800, 120);
+}
+
+void soundWiFiConnected() {
+  // Rising confirmation jingle
+  beep(1046, 70); // C6
+  delay(30);
+  beep(1318, 70); // E6
+  delay(30);
+  beep(1568, 120); // G6
+}
+
+void soundJobPrinting() {
+  // Quick double pulse for print start
+  beep(2000, 60);
+  delay(60);
+  beep(2000, 60);
+}
+
+void soundPrintComplete() {
+  // Kawaii victory melody (Print Done!)
+  beep(1318, 90);  // E6
+  delay(40);
+  beep(1568, 90);  // G6
+  delay(40);
+  beep(2093, 200); // C7
+}
+
+void soundError() {
+  // Low warning buzz
+  beep(400, 300);
+  delay(100);
+  beep(350, 400);
+}
+
 // ==========================================
-// 2. HARDWARE TEST PRINT EXECUTION
+// 3. HARDWARE TEST PRINT EXECUTION
 // ==========================================
 void executeUniversalTestPrint() {
   Serial.println("\n=======================================================");
   Serial.println("  [AUTO-TEST] NEW PRINTER DETECTED! DISPATCHING TEST... ");
   Serial.println("=======================================================");
 
-  // Purple chase while initiating test print
+  // Purple LED while initiating test print
   setRgbColor(180, 0, 255);
+  soundJobPrinting();
 
   if (s_currentBrand == BRAND_HP) {
     Serial.println("[USB-OUT] Sending HP PCL5/6 Hardware Reset & Diagnostics...");
-    // PCL Reset & Test text: ESC E + Text + Form Feed (0x0C) + ESC E
     const char* hpPclInit = "\x1B\x45\x1B&l0O\x1B&l26A\x1B(s3T\x1B(s1B"
       "\r\n\r\nPRINTOSK 2.0 - HP HARDWARE SELF-TEST OK\r\n"
       "Kiosk: BBSR001 | Protocol Industry 2026\r\n\r\n\x0C\x1B\x45";
     Serial.printf("[USB] Streamed %d bytes to HP Printer Bulk OUT\n", strlen(hpPclInit));
   } else {
     Serial.println("[USB-OUT] Sending Epson ESC/P-R Remote Setup & Diagnostics...");
-    // Epson Remote Mode: ESC @ + ESC ( R ...
     const uint8_t epsonInit[] = {
       0x1B, 0x40,                                     // Reset
       0x1B, 0x28, 0x52, 0x08, 0x00,                   // Enter Remote1
@@ -83,12 +141,14 @@ void executeUniversalTestPrint() {
   Serial.println(" [SUCCESS] Test Page dispatched! Printer mechanism engaged.");
   s_hasExecutedSelfTest = true;
 
+  soundPrintComplete();
+
   // Solid Green: Test passed, ready for customer jobs
   setRgbColor(0, 255, 0);
 }
 
 // ==========================================
-// 3. AUTO-REGISTRATION & HEARTBEAT
+// 4. AUTO-REGISTRATION & HEARTBEAT
 // ==========================================
 void sendHeartbeatToSupabase() {
   if (WiFi.status() != WL_CONNECTED) {
@@ -123,33 +183,46 @@ void sendHeartbeatToSupabase() {
 
   int httpCode = http.POST(jsonPayload);
   if (httpCode >= 200 && httpCode < 300) {
-    Serial.printf("[Cloud] Heartbeat OK (Status %d) | Model: %s\n", httpCode, brandName);
+    Serial.printf("[Cloud] Heartbeat OK (%d) | Kiosk: %s | Model: %s\n", httpCode, KIOSK_CODE, brandName);
     setRgbColor(0, 255, 0); // Solid Green
   } else {
+    Serial.printf("[Cloud ERROR] Heartbeat failed HTTP %d\n", httpCode);
     setRgbColor(255, 0, 0); // Red
+    soundError();
   }
   http.end();
 }
 
+// ==========================================
+// 5. SETUP & INITIALIZATION
+// ==========================================
 void setup() {
   Serial.begin(115200);
   delay(1000);
 
+  // Initialize Buzzer Pin
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  // Play startup sound
+  soundBootUp();
+
   Serial.println("\n=======================================================");
   Serial.println("  PRINTOSK 2.0 - UNIVERSAL ESP32-S3 PRINTER CONTROLLER ");
   Serial.println(" Auto-Detection: Epson ESC/P-R + HP PCL + Test-Print    ");
+  Serial.println(" Audio Buzzer Enabled: GPIO 4                          ");
   Serial.println("=======================================================");
 
   // 1. Boot LED: White
   setRgbColor(255, 255, 255);
 
-  // 2. Connect Wi-Fi
+  // 2. Connect to Wi-Fi
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.printf("[WiFi] Associating with %s ...\n", WIFI_SSID);
+  Serial.printf("[WiFi] Connecting to %s ...\n", WIFI_SSID);
 
   while (WiFi.status() != WL_CONNECTED) {
-    setRgbColor(255, 140, 0); // Amber
+    setRgbColor(255, 140, 0); // Amber blink
     delay(200);
     setRgbColor(0, 0, 0);
     delay(200);
@@ -159,17 +232,23 @@ void setup() {
   Serial.println("\n[WiFi] Connected! IP: " + WiFi.localIP().toString());
   setRgbColor(0, 200, 255);
 
+  // Play Wi-Fi connected jingle
+  soundWiFiConnected();
+
   // 3. Register Kiosk in Supabase
   sendHeartbeatToSupabase();
 
-  // 4. Initial Hardware Self-Test: Dispatches diagnostic page on boot!
+  // 4. Initial Hardware Self-Test: Dispatches diagnostic page on boot
   if (!s_hasExecutedSelfTest) {
     executeUniversalTestPrint();
   }
 }
 
+// ==========================================
+// 6. MAIN LOOP
+// ==========================================
 void loop() {
-  // Send status heartbeat every 8 seconds
+  // Pulse heartbeat every 8 seconds
   sendHeartbeatToSupabase();
   delay(8000);
 }
