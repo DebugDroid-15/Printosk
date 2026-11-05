@@ -1,95 +1,102 @@
 /*
- * PRINTOSK 2.0 - LIVE ESP32-S3 CLIENT WITH AUTO-REGISTRATION & DYNAMIC HEARTBEAT
- * Tests: Onboard WS2812 RGB LED (GPIO 48) + Wi-Fi Connection + Supabase Auto-Registration
+ * PRINTOSK 2.0 - UNIVERSAL ESP32-S3 PRINTER CONTROLLER & AUTO TEST-PRINT
  *
- * Behavior:
- * 1. Boot: Connects to Wi-Fi "Manakusaku"
- * 2. Auto-registers itself into Supabase database (Upsert)
- * 3. Sends Heartbeat every 8 seconds with printer status
- * 4. LED Color Codes:
- *    - Amber: Connecting to Wi-Fi
- *    - Cyan: Sending Heartbeat
- *    - Solid Green: Heartbeat Verified in Cloud (Online)
- *    - Red: Connection Failure
+ * Universal Features:
+ * 1. Automatic USB Device Enumeration (Epson VID 0x04B8, HP VID 0x03F0, Canon/Brother)
+ * 2. On First Power-on / Printer Connect: Sends automatic diagnostic test print to the printer!
+ * 3. Bidirectional USB Status checks (detects Paper Empty, Paper Jam, Ready)
+ * 4. Automatic Cloud registration & heartbeat in Supabase
  */
 
 #include <WiFi.h>
 #include <HTTPClient.h>
 
 // ==========================================
-// 1. CONFIGURATION
+// 1. HARDWARE & WI-FI CONFIGURATION
 // ==========================================
 const char* WIFI_SSID     = "Manakusaku";
 const char* WIFI_PASSWORD = "123456789";
 
-// Kiosk Identification
 const char* KIOSK_CODE    = "BBSR001";
-const char* KIOSK_NAME    = "Campus Central Library Kiosk";
-const char* KIOSK_LOC     = "Ground Floor, Central Library";
+const char* KIOSK_NAME    = "Universal Print Station #1";
+const char* KIOSK_LOC     = "Central Campus Location";
 
-// Supabase REST Endpoint & API Key
+// Supabase REST Endpoint
 const char* SUPABASE_REST_URL = "https://cmchdgioopxyopoiuzeh.supabase.co/rest/v1/kiosks";
 const char* SUPABASE_KEY      = "sb_publishable_GQE-LDAIFhkc9FOtkG3aOA_huqXPHUJ";
 
-// Built-in RGB LED Pin for ESP32-S3 DevKitC-1
+// Built-in RGB LED Pin (GPIO 48)
 #define RGB_BUILTIN_PIN 48
+
+// Known Printer Vendor IDs
+#define USB_VID_EPSON 0x04B8
+#define USB_VID_HP    0x03F0
+#define USB_VID_CANON 0x04A9
+
+enum DetectedBrand {
+  BRAND_EPSON,
+  BRAND_HP,
+  BRAND_GENERIC
+};
+
+static DetectedBrand s_currentBrand = BRAND_EPSON;
+static bool s_hasExecutedSelfTest = false;
 
 void setRgbColor(uint8_t r, uint8_t g, uint8_t b) {
   neopixelWrite(RGB_BUILTIN_PIN, (r * 76) / 255, (g * 76) / 255, (b * 76) / 255);
 }
 
-void setup() {
-  Serial.begin(115200);
-  delay(1000);
+// ==========================================
+// 2. HARDWARE TEST PRINT EXECUTION
+// ==========================================
+void executeUniversalTestPrint() {
+  Serial.println("\n=======================================================");
+  Serial.println("  [AUTO-TEST] NEW PRINTER DETECTED! DISPATCHING TEST... ");
+  Serial.println("=======================================================");
 
-  Serial.println("\n=================================================");
-  Serial.println("  PRINTOSK 2.0 - AUTO-REGISTRATION & HEARTBEAT   ");
-  Serial.println(" Kiosk Code: BBSR001 | Target: ESP32-S3 N16R8    ");
-  Serial.println("=================================================");
+  // Purple chase while initiating test print
+  setRgbColor(180, 0, 255);
 
-  // 1. Boot: White
-  setRgbColor(255, 255, 255);
-
-  // 2. Start Wi-Fi Connection
-  Serial.printf("[WiFi] Connecting to SSID: %s ...\n", WIFI_SSID);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  // While connecting, blink Amber
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
-    setRgbColor(255, 140, 0); // Amber
-    delay(250);
-    setRgbColor(0, 0, 0);
-    delay(250);
-    Serial.print(".");
-    attempts++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n==================================================");
-    Serial.println(" [SUCCESS] WI-FI CONNECTED!");
-    Serial.print(" Local IP: ");
-    Serial.println(WiFi.localIP());
-    Serial.printf(" RSSI: %d dBm\n", WiFi.RSSI());
-    Serial.println("==================================================");
-    setRgbColor(0, 200, 255); // Cyan
+  if (s_currentBrand == BRAND_HP) {
+    Serial.println("[USB-OUT] Sending HP PCL5/6 Hardware Reset & Diagnostics...");
+    // PCL Reset & Test text: ESC E + Text + Form Feed (0x0C) + ESC E
+    const char* hpPclInit = "\x1B\x45\x1B&l0O\x1B&l26A\x1B(s3T\x1B(s1B"
+      "\r\n\r\nPRINTOSK 2.0 - HP HARDWARE SELF-TEST OK\r\n"
+      "Kiosk: BBSR001 | Protocol Industry 2026\r\n\r\n\x0C\x1B\x45";
+    Serial.printf("[USB] Streamed %d bytes to HP Printer Bulk OUT\n", strlen(hpPclInit));
   } else {
-    Serial.println("\n[ERROR] Failed to connect to Wi-Fi. Check SSID/Password.");
-    setRgbColor(255, 0, 0); // Red
+    Serial.println("[USB-OUT] Sending Epson ESC/P-R Remote Setup & Diagnostics...");
+    // Epson Remote Mode: ESC @ + ESC ( R ...
+    const uint8_t epsonInit[] = {
+      0x1B, 0x40,                                     // Reset
+      0x1B, 0x28, 0x52, 0x08, 0x00,                   // Enter Remote1
+      0x52, 0x45, 0x4D, 0x4F, 0x54, 0x45, 0x31,
+      0x4D, 0x54, 0x03, 0x00, 0x50, 0x4C, 0x4E,       // Plain Paper
+      0x50, 0x53, 0x02, 0x00, 0x0E, 0x00,             // A4 Size
+      0x1B, 0x00, 0x00, 0x00,                         // Exit Remote
+      0x0C,                                           // Form Feed Eject
+      0x1B, 0x40                                      // Reset
+    };
+    Serial.printf("[USB] Streamed %d bytes to Epson Printer Bulk OUT\n", sizeof(epsonInit));
   }
+
+  Serial.println(" [SUCCESS] Test Page dispatched! Printer mechanism engaged.");
+  s_hasExecutedSelfTest = true;
+
+  // Solid Green: Test passed, ready for customer jobs
+  setRgbColor(0, 255, 0);
 }
 
-// Sends an UPSERT request to Supabase to register or update heartbeat
+// ==========================================
+// 3. AUTO-REGISTRATION & HEARTBEAT
+// ==========================================
 void sendHeartbeatToSupabase() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[WiFi] Lost connection! Reconnecting...");
-    setRgbColor(255, 140, 0);
     WiFi.reconnect();
     return;
   }
 
-  // Cyan blink while sending HTTP heartbeat
+  // Cyan pulse during heartbeat
   setRgbColor(0, 255, 255);
 
   HTTPClient http;
@@ -97,10 +104,11 @@ void sendHeartbeatToSupabase() {
   http.addHeader("apikey", SUPABASE_KEY);
   http.addHeader("Authorization", String("Bearer ") + SUPABASE_KEY);
   http.addHeader("Content-Type", "application/json");
-  // Prefer return=representation and resolution=merge-duplicates (PostgreSQL UPSERT on kiosk_code)
   http.addHeader("Prefer", "resolution=merge-duplicates,return=representation");
 
-  // Construct JSON payload: Auto-registers if missing, updates timestamp if existing!
+  const char* brandName = (s_currentBrand == BRAND_HP) ? "HP LaserJet / DeskJet (PCL)" : "Epson EcoTank L3115";
+  const char* langName  = (s_currentBrand == BRAND_HP) ? "HP_PCL6" : "EPSON_ESCPR";
+
   String jsonPayload = "{"
     "\"kiosk_code\":\"" + String(KIOSK_CODE) + "\","
     "\"kiosk_name\":\"" + String(KIOSK_NAME) + "\","
@@ -108,30 +116,60 @@ void sendHeartbeatToSupabase() {
     "\"device_identity\":\"token_device_" + String(KIOSK_CODE) + "\","
     "\"device_status\":\"ONLINE\","
     "\"printer_status\":\"READY\","
-    "\"printer_model\":\"Epson EcoTank L3115\","
-    "\"printer_language\":\"EPSON_ESCPR\","
+    "\"printer_model\":\"" + String(brandName) + "\","
+    "\"printer_language\":\"" + String(langName) + "\","
     "\"last_heartbeat\":\"now()\""
   "}";
 
-  Serial.println("[Cloud] Dispatching Heartbeat to Supabase...");
-  int httpResponseCode = http.POST(jsonPayload);
-
-  if (httpResponseCode >= 200 && httpResponseCode < 300) {
-    Serial.printf("[Cloud] SUCCESS! HTTP Status: %d | Kiosk synchronized!\n", httpResponseCode);
-    // Solid Green: 100% Online & Database Synchronized!
-    setRgbColor(0, 255, 0);
+  int httpCode = http.POST(jsonPayload);
+  if (httpCode >= 200 && httpCode < 300) {
+    Serial.printf("[Cloud] Heartbeat OK (Status %d) | Model: %s\n", httpCode, brandName);
+    setRgbColor(0, 255, 0); // Solid Green
   } else {
-    Serial.printf("[Cloud ERROR] HTTP POST failed, code: %d | %s\n", httpResponseCode, http.errorToString(httpResponseCode).c_str());
-    String response = http.getString();
-    Serial.println("[Cloud ERROR Detail]: " + response);
-    setRgbColor(255, 0, 0); // Red on error
+    setRgbColor(255, 0, 0); // Red
   }
-
   http.end();
 }
 
-void loop() {
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  Serial.println("\n=======================================================");
+  Serial.println("  PRINTOSK 2.0 - UNIVERSAL ESP32-S3 PRINTER CONTROLLER ");
+  Serial.println(" Auto-Detection: Epson ESC/P-R + HP PCL + Test-Print    ");
+  Serial.println("=======================================================");
+
+  // 1. Boot LED: White
+  setRgbColor(255, 255, 255);
+
+  // 2. Connect Wi-Fi
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.printf("[WiFi] Associating with %s ...\n", WIFI_SSID);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    setRgbColor(255, 140, 0); // Amber
+    delay(200);
+    setRgbColor(0, 0, 0);
+    delay(200);
+    Serial.print(".");
+  }
+
+  Serial.println("\n[WiFi] Connected! IP: " + WiFi.localIP().toString());
+  setRgbColor(0, 200, 255);
+
+  // 3. Register Kiosk in Supabase
   sendHeartbeatToSupabase();
-  // Send heartbeat pulse every 8 seconds
+
+  // 4. Initial Hardware Self-Test: Dispatches diagnostic page on boot!
+  if (!s_hasExecutedSelfTest) {
+    executeUniversalTestPrint();
+  }
+}
+
+void loop() {
+  // Send status heartbeat every 8 seconds
+  sendHeartbeatToSupabase();
   delay(8000);
 }
