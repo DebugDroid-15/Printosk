@@ -172,3 +172,4 @@ export class UniversalPrinterDriver {
     return Buffer.concat(chunks);
   }
 }
+
