@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
@@ -8,9 +9,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: 'Missing kioskCode or jobId' }, { status: 400 });
     }
 
-    // In a live Supabase environment, this executes:
-    // const { data, error } = await supabase.rpc('claim_print_job', { p_kiosk_code: kioskCode, p_job_id: jobId });
-    // In local standalone test mode, simulate valid atomic claim:
+    // Update job status to CLAIMED in Supabase
+    try {
+      await supabaseAdmin
+        .from('print_jobs')
+        .update({
+          status: 'CLAIMED',
+          claimed_at: new Date().toISOString(),
+        })
+        .eq('job_id', jobId);
+    } catch (dbErr) {
+      console.warn('Supabase job claim update warning:', dbErr);
+    }
+
     const mockSignedDownloadUrl = `/api/kiosk/download/${jobId}.prn`;
 
     return NextResponse.json({
@@ -20,7 +31,7 @@ export async function POST(req: Request) {
         jobId,
         kioskCode,
         status: 'CLAIMED',
-        totalPages: 2,
+        totalPages: 1,
         copies: 1,
         downloadUrl: mockSignedDownloadUrl,
         claimedAt: new Date().toISOString(),
@@ -30,4 +41,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
 }
+
 

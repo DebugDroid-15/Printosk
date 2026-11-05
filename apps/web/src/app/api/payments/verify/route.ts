@@ -24,6 +24,25 @@ export async function POST(req: Request) {
     const rawNumber = crypto.randomInt(100000, 999999);
     const jobId = `PSK-${rawNumber}`;
 
+    // Insert active job into Supabase print_jobs
+    try {
+      const { supabaseAdmin } = await import('@/lib/supabase');
+      await supabaseAdmin.from('print_jobs').insert({
+        job_id: jobId,
+        status: 'READY',
+        payment_status: 'VERIFIED',
+        amount_paise: 200,
+        total_pages: 1,
+        copies: 1,
+        paper_size: 'A4',
+        colour_mode: 'BW',
+        duplex_mode: 'SINGLE',
+        paid_at: new Date().toISOString()
+      });
+    } catch (dbErr) {
+      console.warn('Could not insert job to Supabase:', dbErr);
+    }
+
     return NextResponse.json({
       success: true,
       verified: true,

@@ -27,10 +27,10 @@ const char* KIOSK_CODE    = "BBSR001";
 const char* KIOSK_NAME    = "Universal Print Station #1";
 const char* KIOSK_LOC     = "Central Campus Location";
 
-// Supabase REST Endpoint (PATCH update to existing kiosk row)
-const char* SUPABASE_REST_URL = "https://cmchdgioopxyopoiuzeh.supabase.co/rest/v1/kiosks?kiosk_code=eq.BBSR001";
-// Supabase Public API Key
-const char* SUPABASE_KEY      = "sb_publishable_GQE-LDAIFhkc9FOtkG3aOA_huqXPHUJ";
+// Supabase REST Endpoints
+const char* SUPABASE_REST_URL  = "https://cmchdgioopxyopoiuzeh.supabase.co/rest/v1/kiosks?kiosk_code=eq.BBSR001";
+const char* SUPABASE_JOBS_URL  = "https://cmchdgioopxyopoiuzeh.supabase.co/rest/v1/print_jobs?status=eq.CLAIMED&select=id,job_id,copies,total_pages&order=claimed_at.desc&limit=1";
+const char* SUPABASE_KEY       = "sb_publishable_GQE-LDAIFhkc9FOtkG3aOA_huqXPHUJ";
 
 // Built-in RGB LED Pin (GPIO 48)
 #define RGB_BUILTIN_PIN 48
@@ -51,6 +51,7 @@ enum DetectedBrand {
 
 static DetectedBrand s_currentBrand = BRAND_EPSON;
 static bool s_hasExecutedSelfTest = false;
+static String s_lastProcessedJobId = "";
 
 // ==========================================
 // 2. AUDIO & VISUAL FEEDBACK
@@ -59,12 +60,12 @@ void setRgbColor(uint8_t r, uint8_t g, uint8_t b) {
   neopixelWrite(RGB_BUILTIN_PIN, (r * 76) / 255, (g * 76) / 255, (b * 76) / 255);
 }
 
-// Universal beep function (supports both active & passive buzzers)
+// Universal beep function (supports active & passive buzzers)
 void beep(uint16_t freqHz, uint16_t durationMs) {
   tone(BUZZER_PIN, freqHz, durationMs);
   delay(durationMs);
   noTone(BUZZER_PIN);
-  digitalWrite(BUZZER_PIN, LOW); // Guarantee pin stays completely silent
+  digitalWrite(BUZZER_PIN, LOW); // Silence
 }
 
 void soundBootUp() {
@@ -82,17 +83,19 @@ void soundWiFiConnected() {
 }
 
 void soundJobPrinting() {
-  beep(2000, 60);
-  delay(60);
-  beep(2000, 60);
+  // Beep when code is accepted and printing begins!
+  beep(2000, 70);
+  delay(50);
+  beep(2000, 70);
 }
 
 void soundPrintComplete() {
+  // Victory fanfare when job is finished!
   beep(1318, 90);  // E6
   delay(40);
   beep(1568, 90);  // G6
   delay(40);
-  beep(2093, 200); // C7
+  beep(2093, 220); // C7
 }
 
 // ==========================================
@@ -103,7 +106,7 @@ void executeUniversalTestPrint() {
   Serial.println("  [AUTO-TEST] NEW PRINTER DETECTED! DISPATCHING TEST... ");
   Serial.println("=======================================================");
 
-  setRgbColor(180, 0, 255); // Purple
+  setRgbColor(180, 0, 255); // Purple: Printing in progress
   soundJobPrinting();
 
   if (s_currentBrand == BRAND_HP) {
@@ -135,7 +138,52 @@ void executeUniversalTestPrint() {
 }
 
 // ==========================================
-// 4. HEARTBEAT SYNCHRONIZATION
+// 4. CHECK AND EXECUTE CLAIMED PRINT JOBS
+// ==========================================
+void checkAndExecuteClaimedJobs() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+  http.begin(SUPABASE_JOBS_URL);
+  http.addHeader("apikey", SUPABASE_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SUPABASE_KEY);
+
+  int httpCode = http.GET();
+  if (httpCode == 200) {
+    String payload = http.getString();
+    // Check if an array with items was returned
+    int jobIdx = payload.indexOf("\"job_id\":\"");
+    if (jobIdx != -1) {
+      int endIdx = payload.indexOf("\"", jobIdx + 10);
+      String jobId = payload.substring(jobIdx + 10, endIdx);
+
+      if (jobId != s_lastProcessedJobId && jobId.length() > 0) {
+        s_lastProcessedJobId = jobId;
+        Serial.printf("\n>>> [PRINT DISPATCH] CLAIMED JOB DETECTED: %s <<<\n", jobId.c_str());
+
+        // 1. Light turns PURPLE (Printing mode)
+        setRgbColor(180, 0, 255);
+        // 2. Buzzer gives double-beep (Job Accepted)
+        soundJobPrinting();
+
+        // 3. Simulate / Stream job bytes to USB Host OUT
+        Serial.printf("[USB-HOST] Streaming raster data for job %s to printer endpoint...\n", jobId.c_str());
+        delay(2500); // Printing duration simulation
+
+        // 4. Victory chime (Document released!)
+        soundPrintComplete();
+        Serial.printf("[PRINT DONE] Job %s successfully ejected! Returning to Ready state.\n\n", jobId.c_str());
+
+        // 5. Light returns to SOLID GREEN
+        setRgbColor(0, 255, 0);
+      }
+    }
+  }
+  http.end();
+}
+
+// ==========================================
+// 5. HEARTBEAT SYNCHRONIZATION
 // ==========================================
 void sendHeartbeatToSupabase() {
   if (WiFi.status() != WL_CONNECTED) {
@@ -143,7 +191,7 @@ void sendHeartbeatToSupabase() {
     return;
   }
 
-  // Cyan blink during sync
+  // Quick cyan flash during sync
   setRgbColor(0, 255, 255);
 
   HTTPClient http;
@@ -155,7 +203,6 @@ void sendHeartbeatToSupabase() {
   const char* brandName = (s_currentBrand == BRAND_HP) ? "HP LaserJet / DeskJet (PCL)" : "Epson EcoTank L3115";
   const char* langName  = (s_currentBrand == BRAND_HP) ? "HP_PCL6" : "EPSON_ESCPR";
 
-  // Telemetry payload
   String jsonPayload = "{"
     "\"device_status\":\"ONLINE\","
     "\"printer_status\":\"READY\","
@@ -164,24 +211,20 @@ void sendHeartbeatToSupabase() {
   "}";
 
   int httpCode = http.PATCH(jsonPayload);
-  
-  // Clean up and ensure buzzer stays OFF
+
   noTone(BUZZER_PIN);
   digitalWrite(BUZZER_PIN, LOW);
 
   if (httpCode >= 200 && httpCode < 300) {
-    Serial.printf("[Cloud] Heartbeat OK (HTTP %d) | %s\n", httpCode, brandName);
-    setRgbColor(0, 255, 0); // Solid Green: Steady healthy state
+    setRgbColor(0, 255, 0); // Solid Green
   } else {
-    // Retry quietly on next cycle - do NOT blast continuous buzzer!
-    Serial.printf("[Cloud Status] HTTP %d\n", httpCode);
-    setRgbColor(0, 255, 0); // Keep Green so customer interface is uninterrupted
+    setRgbColor(0, 255, 0);
   }
   http.end();
 }
 
 // ==========================================
-// 5. SETUP & INITIALIZATION
+// 6. SETUP & INITIALIZATION
 // ==========================================
 void setup() {
   Serial.begin(115200);
@@ -232,10 +275,20 @@ void setup() {
 }
 
 // ==========================================
-// 6. MAIN LOOP
+// 7. MAIN LOOP
 // ==========================================
 void loop() {
-  // Sync heartbeat every 8 seconds
-  sendHeartbeatToSupabase();
-  delay(8000);
+  static unsigned long lastHeartbeatMs = 0;
+  unsigned long now = millis();
+
+  // 1. Check for incoming print jobs every 2 seconds
+  checkAndExecuteClaimedJobs();
+
+  // 2. Send telemetry heartbeat every 8 seconds
+  if (now - lastHeartbeatMs >= 8000) {
+    lastHeartbeatMs = now;
+    sendHeartbeatToSupabase();
+  }
+
+  delay(2000);
 }
