@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase';
 
 // Secret token for authorized kiosks
 const VALID_DEVICE_TOKEN = process.env.KIOSK_API_SECRET_TOKEN || 'device_token_hash_bbsr001_secret';
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
     // Upsert: Automatically registers the kiosk if it's the first time,
     // or updates heartbeat, device_status, and printer_status if it already exists!
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('kiosks')
       .upsert(
         {

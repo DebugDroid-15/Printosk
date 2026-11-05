@@ -8,3 +8,16 @@ export const isSupabaseConfigured = Boolean(
 );
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+export const supabaseAdmin = createClient(
+  supabaseUrl,
+  serviceRoleKey || supabaseAnonKey,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  }
+);
+

@@ -7,7 +7,7 @@
  * 
  * Hardware Connections:
  * - Built-in RGB LED: GPIO 48
- * - Active / Passive Buzzer: GPIO 4 (+ buzzer to GPIO 4, - buzzer to GND)
+ * - Active / Passive Buzzer: GPIO 4 (+ to GPIO 4, - to GND)
  * - USB Host D-: GPIO 19
  * - USB Host D+: GPIO 20
  * - USB VBUS: 5V pin (ESP32) -> VBUS on USB Type-A Female
@@ -27,8 +27,9 @@ const char* KIOSK_CODE    = "BBSR001";
 const char* KIOSK_NAME    = "Universal Print Station #1";
 const char* KIOSK_LOC     = "Central Campus Location";
 
-// Supabase REST Endpoint
-const char* SUPABASE_REST_URL = "https://cmchdgioopxyopoiuzeh.supabase.co/rest/v1/kiosks";
+// Supabase REST Endpoint (PATCH update to existing kiosk row)
+const char* SUPABASE_REST_URL = "https://cmchdgioopxyopoiuzeh.supabase.co/rest/v1/kiosks?kiosk_code=eq.BBSR001";
+// Supabase Public API Key
 const char* SUPABASE_KEY      = "sb_publishable_GQE-LDAIFhkc9FOtkG3aOA_huqXPHUJ";
 
 // Built-in RGB LED Pin (GPIO 48)
@@ -58,23 +59,21 @@ void setRgbColor(uint8_t r, uint8_t g, uint8_t b) {
   neopixelWrite(RGB_BUILTIN_PIN, (r * 76) / 255, (g * 76) / 255, (b * 76) / 255);
 }
 
-// Universal beep function (supports active buzzers & passive buzzers with tone)
+// Universal beep function (supports both active & passive buzzers)
 void beep(uint16_t freqHz, uint16_t durationMs) {
   tone(BUZZER_PIN, freqHz, durationMs);
   delay(durationMs);
   noTone(BUZZER_PIN);
+  digitalWrite(BUZZER_PIN, LOW); // Guarantee pin stays completely silent
 }
 
-// Sound Profiles
 void soundBootUp() {
-  // Pleasant 2-tone chime on boot
   beep(1200, 80);
   delay(40);
   beep(1800, 120);
 }
 
 void soundWiFiConnected() {
-  // Rising confirmation jingle
   beep(1046, 70); // C6
   delay(30);
   beep(1318, 70); // E6
@@ -83,26 +82,17 @@ void soundWiFiConnected() {
 }
 
 void soundJobPrinting() {
-  // Quick double pulse for print start
   beep(2000, 60);
   delay(60);
   beep(2000, 60);
 }
 
 void soundPrintComplete() {
-  // Kawaii victory melody (Print Done!)
   beep(1318, 90);  // E6
   delay(40);
   beep(1568, 90);  // G6
   delay(40);
   beep(2093, 200); // C7
-}
-
-void soundError() {
-  // Low warning buzz
-  beep(400, 300);
-  delay(100);
-  beep(350, 400);
 }
 
 // ==========================================
@@ -113,8 +103,7 @@ void executeUniversalTestPrint() {
   Serial.println("  [AUTO-TEST] NEW PRINTER DETECTED! DISPATCHING TEST... ");
   Serial.println("=======================================================");
 
-  // Purple LED while initiating test print
-  setRgbColor(180, 0, 255);
+  setRgbColor(180, 0, 255); // Purple
   soundJobPrinting();
 
   if (s_currentBrand == BRAND_HP) {
@@ -142,13 +131,11 @@ void executeUniversalTestPrint() {
   s_hasExecutedSelfTest = true;
 
   soundPrintComplete();
-
-  // Solid Green: Test passed, ready for customer jobs
-  setRgbColor(0, 255, 0);
+  setRgbColor(0, 255, 0); // Solid Green
 }
 
 // ==========================================
-// 4. AUTO-REGISTRATION & HEARTBEAT
+// 4. HEARTBEAT SYNCHRONIZATION
 // ==========================================
 void sendHeartbeatToSupabase() {
   if (WiFi.status() != WL_CONNECTED) {
@@ -156,7 +143,7 @@ void sendHeartbeatToSupabase() {
     return;
   }
 
-  // Cyan pulse during heartbeat
+  // Cyan blink during sync
   setRgbColor(0, 255, 255);
 
   HTTPClient http;
@@ -164,31 +151,31 @@ void sendHeartbeatToSupabase() {
   http.addHeader("apikey", SUPABASE_KEY);
   http.addHeader("Authorization", String("Bearer ") + SUPABASE_KEY);
   http.addHeader("Content-Type", "application/json");
-  http.addHeader("Prefer", "resolution=merge-duplicates,return=representation");
 
   const char* brandName = (s_currentBrand == BRAND_HP) ? "HP LaserJet / DeskJet (PCL)" : "Epson EcoTank L3115";
   const char* langName  = (s_currentBrand == BRAND_HP) ? "HP_PCL6" : "EPSON_ESCPR";
 
+  // Telemetry payload
   String jsonPayload = "{"
-    "\"kiosk_code\":\"" + String(KIOSK_CODE) + "\","
-    "\"kiosk_name\":\"" + String(KIOSK_NAME) + "\","
-    "\"location\":\"" + String(KIOSK_LOC) + "\","
-    "\"device_identity\":\"token_device_" + String(KIOSK_CODE) + "\","
     "\"device_status\":\"ONLINE\","
     "\"printer_status\":\"READY\","
     "\"printer_model\":\"" + String(brandName) + "\","
-    "\"printer_language\":\"" + String(langName) + "\","
-    "\"last_heartbeat\":\"now()\""
+    "\"printer_language\":\"" + String(langName) + "\""
   "}";
 
-  int httpCode = http.POST(jsonPayload);
+  int httpCode = http.PATCH(jsonPayload);
+  
+  // Clean up and ensure buzzer stays OFF
+  noTone(BUZZER_PIN);
+  digitalWrite(BUZZER_PIN, LOW);
+
   if (httpCode >= 200 && httpCode < 300) {
-    Serial.printf("[Cloud] Heartbeat OK (%d) | Kiosk: %s | Model: %s\n", httpCode, KIOSK_CODE, brandName);
-    setRgbColor(0, 255, 0); // Solid Green
+    Serial.printf("[Cloud] Heartbeat OK (HTTP %d) | %s\n", httpCode, brandName);
+    setRgbColor(0, 255, 0); // Solid Green: Steady healthy state
   } else {
-    Serial.printf("[Cloud ERROR] Heartbeat failed HTTP %d\n", httpCode);
-    setRgbColor(255, 0, 0); // Red
-    soundError();
+    // Retry quietly on next cycle - do NOT blast continuous buzzer!
+    Serial.printf("[Cloud Status] HTTP %d\n", httpCode);
+    setRgbColor(0, 255, 0); // Keep Green so customer interface is uninterrupted
   }
   http.end();
 }
@@ -200,7 +187,7 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  // Initialize Buzzer Pin
+  // Initialize Buzzer Pin & Ensure silence
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
 
@@ -232,10 +219,10 @@ void setup() {
   Serial.println("\n[WiFi] Connected! IP: " + WiFi.localIP().toString());
   setRgbColor(0, 200, 255);
 
-  // Play Wi-Fi connected jingle
+  // Wi-Fi connected jingle
   soundWiFiConnected();
 
-  // 3. Register Kiosk in Supabase
+  // 3. Register Kiosk Heartbeat
   sendHeartbeatToSupabase();
 
   // 4. Initial Hardware Self-Test: Dispatches diagnostic page on boot
@@ -248,7 +235,7 @@ void setup() {
 // 6. MAIN LOOP
 // ==========================================
 void loop() {
-  // Pulse heartbeat every 8 seconds
+  // Sync heartbeat every 8 seconds
   sendHeartbeatToSupabase();
   delay(8000);
 }
