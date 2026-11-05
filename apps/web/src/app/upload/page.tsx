@@ -61,93 +61,33 @@ export default function UploadPage() {
     }
   };
 
-  const handleProceedToPayment = async () => {
+  const handleProceedToGenerateCode = async () => {
     if (!file) return;
     setIsProcessingPayment(true);
     setError(null);
 
     try {
-      // 1. Create Order on Server
-      const orderRes = await fetch('/api/payments/create-order', {
+      // Direct instant generation for testing mode (bypassing Razorpay popup)
+      const res = await fetch('/api/payments/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amountPaise: totalAmountPaise,
-          currency: 'INR',
-          receipt: `rcpt_${Date.now()}`,
+          razorpay_order_id: `test_ord_${Date.now()}`,
+          razorpay_payment_id: `test_pay_${Date.now()}`,
+          testMode: true,
         }),
       });
-      const orderData = await orderRes.json();
-      if (!orderData.success) throw new Error(orderData.error || 'Order creation failed');
 
-      // 2. Open Official Razorpay Checkout Modal
-      if (typeof window !== 'undefined' && window.Razorpay) {
-        const options = {
-          key: orderData.keyId,
-          amount: orderData.order.amount,
-          currency: orderData.order.currency,
-          name: 'Printosk 2.0',
-          description: `${totalPages} Pages (${colourMode}) × ${copies} Copy`,
-          order_id: orderData.order.id,
-          theme: {
-            color: '#FF85A1', // Kawaii theme pink
-          },
-          handler: async function (response: any) {
-            // 3. Server-side payment signature verification
-            try {
-              const verifyRes = await fetch('/api/payments/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                  testMode: false,
-                }),
-              });
-              const verifyData = await verifyRes.json();
-              if (!verifyData.success) throw new Error(verifyData.error || 'Payment verification failed');
-
-              router.push(
-                `/payment-success?jobId=${verifyData.jobId}&pages=${totalPages}&copies=${copies}&amount=${totalAmount}`
-              );
-            } catch (vErr: any) {
-              setError(vErr.message);
-              setIsProcessingPayment(false);
-            }
-          },
-          modal: {
-            ondismiss: function () {
-              setIsProcessingPayment(false);
-            },
-          },
-        };
-
-        const rzp = new window.Razorpay(options);
-        rzp.on('payment.failed', function (resp: any) {
-          setError(resp.error.description || 'Payment was cancelled or failed.');
-          setIsProcessingPayment(false);
-        });
-        rzp.open();
-      } else {
-        // Fallback for offline/test environments without Razorpay CDN
-        const verifyRes = await fetch('/api/payments/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            razorpay_order_id: orderData.order.id,
-            razorpay_payment_id: `pay_${Date.now()}`,
-            razorpay_signature: 'test_signature_bypass',
-            testMode: true,
-          }),
-        });
-        const verifyData = await verifyRes.json();
-        router.push(
-          `/payment-success?jobId=${verifyData.jobId}&pages=${totalPages}&copies=${copies}&amount=${totalAmount}`
-        );
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to generate kiosk code');
       }
+
+      router.push(
+        `/payment-success?jobId=${data.jobId}&pages=${totalPages}&copies=${copies}&amount=${totalAmount}`
+      );
     } catch (err: any) {
-      setError(err.message || 'Payment initialization failed. Please try again.');
+      setError(err.message || 'Failed to generate code. Please try again.');
       setIsProcessingPayment(false);
     }
   };
@@ -287,17 +227,17 @@ export default function UploadPage() {
           <button
             type="button"
             disabled={!file || isAnalyzing || isProcessingPayment}
-            onClick={handleProceedToPayment}
+            onClick={handleProceedToGenerateCode}
             className="w-full sm:w-auto bg-kawaii-pink hover:bg-kawaii-pink-dark disabled:opacity-50 text-white font-black text-base px-8 py-4 rounded-3xl border-3 border-slate-900 shadow-[4px_4px_0px_0px_#1E293B] hover:shadow-[1px_1px_0px_0px_#1E293B] transition-all flex items-center justify-center space-x-2"
           >
             {isProcessingPayment ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Opening Razorpay...</span>
+                <span>Generating Kiosk Code...</span>
               </>
             ) : (
               <>
-                <span>Pay via Razorpay 💳</span>
+                <span>Proceed & Generate Code 🚀</span>
                 <Sparkles className="w-5 h-5 text-kawaii-yellow" />
               </>
             )}

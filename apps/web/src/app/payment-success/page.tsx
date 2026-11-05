@@ -30,10 +30,10 @@ function PaymentSuccessContent() {
 
         <div>
           <div className="inline-block bg-kawaii-yellow text-slate-900 text-xs font-black px-3 py-1 rounded-full border-2 border-slate-900 shadow-[2px_2px_0px_0px_#1E293B] mb-2">
-            Payment Verified! 🎉
+            Code Generated Successfully! 🎉
           </div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Woohoo! Job is Ready! ✨</h1>
-          <p className="font-bold text-slate-500 text-sm mt-1">Here is your special kiosk pass to release the papers:</p>
+          <p className="font-bold text-slate-500 text-sm mt-1">Here is your special 6-digit release code for the kiosk:</p>
         </div>
 
         {/* Big Kawaii Job ID Box */}

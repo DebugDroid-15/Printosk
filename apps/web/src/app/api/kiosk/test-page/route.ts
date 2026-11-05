@@ -9,7 +9,7 @@ export async function GET(req: Request) {
 
     const testPageBuffer = UniversalPrinterDriver.generateTestPage(language, kioskCode);
 
-    return new NextResponse(testPageBuffer, {
+    return new NextResponse(new Uint8Array(testPageBuffer), {
       headers: {
         'Content-Type': 'application/octet-stream',
         'Content-Disposition': `attachment; filename="selftest_${language.toLowerCase()}.prn"`,
